@@ -3,7 +3,7 @@
 import type { DB } from "./db";
 import { getSettings } from "./catalog";
 
-const CARDS_PER_SHEET = 12; // 4 × 3 on landscape A4
+const CARDS_PER_SHEET = 8; // 2 × 4 on portrait A4, each 99 × 66mm (3:2, like the artwork)
 const STRIPS_PER_ROW = 10; // 2 rows per portrait A4
 
 const esc = (s: string) =>
@@ -90,41 +90,41 @@ export function giftCardsHtml(db: DB, opts: { backups: boolean }) {
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Gift Cards</title>${FONTS}
 <style>
-@page { size: A4 landscape; margin: 0; }
+@page { size: A4; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { -webkit-print-color-adjust: exact; print-color-adjust: exact;
        font-family: Nunito, "Helvetica Neue", Arial, sans-serif; color: #4a3438; }
-/* 6mm page margin keeps cards inside every printer's printable area */
-.sheet { width: 297mm; height: 210mm; padding: 6mm; display: grid; background: #fff;
-         grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
+/* Cards keep the artwork's 3:2 shape; the block is centred, leaving ≥6mm for the printer's margin */
+.sheet { width: 210mm; height: 297mm; display: grid; place-content: center; background: #fff;
+         grid-template-columns: repeat(2, 99mm); grid-template-rows: repeat(4, 66mm);
          break-after: page; overflow: hidden; }
 .sheet:last-child { break-after: auto; }
 .card { position: relative; outline: 0.2mm dashed #bdbdbd; outline-offset: -0.1mm;
-        background: url(/print/giftcard-bg.jpg) center / cover no-repeat;
-        padding: 3.6mm 4.2mm 3.2mm 46%; display: flex; flex-direction: column;
+        background: url(/print/giftcard-bg.jpg) center / 100% 100% no-repeat;
+        padding: 5mm 5.8mm 4.4mm 46%; display: flex; flex-direction: column;
         justify-content: center; overflow: hidden; }
-.title { line-height: 0.9; text-align: center; margin-bottom: 0.8mm; white-space: nowrap; }
-.gift { font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 17pt; color: #e0636c; }
-.cardw { font-family: "Great Vibes", cursive; font-size: 19pt; color: #2d8c8c; margin-left: 1.2mm; }
-.store { font-size: 4.2pt; font-weight: 700; letter-spacing: 0.1pt; text-align: center; color: #fff;
-         background: #e8737a; border-radius: 0.8mm; padding: 0.5mm 0.8mm; margin: 0 0 1.6mm;
+.title { line-height: 0.9; text-align: center; margin-bottom: 1.1mm; white-space: nowrap; }
+.gift { font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 23.5pt; color: #e0636c; }
+.cardw { font-family: "Great Vibes", cursive; font-size: 26pt; color: #2d8c8c; margin-left: 1.7mm; }
+.store { font-size: 5.8pt; font-weight: 700; letter-spacing: 0.15pt; text-align: center; color: #fff;
+         background: #e8737a; border-radius: 1.1mm; padding: 0.7mm 1.1mm; margin: 0 0 2.2mm;
          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row { display: flex; align-items: baseline; gap: 1.2mm; margin-bottom: 1.1mm; }
-.lbl { font-size: 4.8pt; letter-spacing: 0.3pt; color: #b0757a; width: 7mm; text-align: right; flex: none; }
-.fill { flex: 1; font-size: 7.6pt; font-weight: 700; text-align: center; min-height: 3.6mm;
-        border-bottom: 0.2mm solid #d9a3a7; padding-bottom: 0.2mm; white-space: nowrap; }
-.fill.blank { color: #cfaeb1; font-weight: 600; text-align: left; padding-left: 1mm; }
-.numrow { display: flex; flex-direction: column; align-items: center; margin-top: 1.2mm; }
-.nlbl { font-size: 4.8pt; letter-spacing: 0.3pt; color: #b0757a; text-transform: uppercase; }
-.num { font-family: "Roboto Mono", Menlo, monospace; font-size: 8.6pt; font-weight: 700;
-       letter-spacing: 0.2pt; white-space: nowrap; margin-top: 0.3mm; }
-.num.blank { align-self: stretch; border-bottom: 0.2mm solid #d9a3a7; height: 4.2mm; }
-.valid { font-size: 3.9pt; letter-spacing: 0.25pt; text-transform: uppercase; color: #b0757a;
-         text-align: center; margin-top: 1mm; }
+.row { display: flex; align-items: baseline; gap: 1.7mm; margin-bottom: 1.5mm; }
+.lbl { font-size: 6.7pt; letter-spacing: 0.4pt; color: #b0757a; width: 9.7mm; text-align: right; flex: none; }
+.fill { flex: 1; font-size: 10.5pt; font-weight: 700; text-align: center; min-height: 5mm;
+        border-bottom: 0.3mm solid #d9a3a7; padding-bottom: 0.3mm; white-space: nowrap; }
+.fill.blank { color: #cfaeb1; font-weight: 600; text-align: left; padding-left: 1.4mm; }
+.numrow { display: flex; flex-direction: column; align-items: center; margin-top: 1.7mm; }
+.nlbl { font-size: 6.7pt; letter-spacing: 0.4pt; color: #b0757a; text-transform: uppercase; }
+.num { font-family: "Roboto Mono", Menlo, monospace; font-size: 12pt; font-weight: 700;
+       letter-spacing: 0.3pt; white-space: nowrap; margin-top: 0.4mm; }
+.num.blank { align-self: stretch; border-bottom: 0.3mm solid #d9a3a7; height: 5.8mm; }
+.valid { font-size: 5.4pt; letter-spacing: 0.35pt; text-transform: uppercase; color: #b0757a;
+         text-align: center; margin-top: 1.4mm; }
 @media screen { .sheet { margin: 16px auto; box-shadow: 0 2px 12px rgba(0,0,0,.25); } }
 ${TOOLBAR_CSS}
 </style></head><body>
-${toolbar("Gift cards", `${summary} Print on A4 landscape at 100% scale (not “Fit to page”), with background graphics on.`)}
+${toolbar("Gift cards", `${summary} Print on A4 portrait at 100% scale (not “Fit to page”), with background graphics on.`)}
 ${sheets.join("\n") || '<p style="padding:24px;color:#fff">No gift cards yet.</p>'}
 </body></html>`;
 }

@@ -18,7 +18,7 @@ import PrintIcon from "@mui/icons-material/Print";
 import { useApi, voucherLabel, type AdminCard, type AdminVoucher, type Settings } from "../api";
 import { PageHeader } from "../components";
 
-const CARDS_PER_SHEET = 12;
+const CARDS_PER_SHEET = 8;
 const CODES_PER_PAGE = 20;
 
 export default function Printables() {
@@ -63,7 +63,7 @@ export default function Printables() {
               Gift cards
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              12 cards per A4 sheet (landscape), sorted by group, with dashed cut lines.
+              8 cards per A4 sheet (portrait, 99 × 66 mm each), sorted by group, with dashed cut lines.
             </Typography>
             <Box
               component="img"
