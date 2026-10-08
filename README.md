@@ -69,7 +69,7 @@ In `/admin`:
 1. **Settings**: set the groups (e.g. "Make groups 1 to 55"), the gift card "From" and "Valid until" lines, and the discount cap.
 2. **Gift Cards**: generate one card per group (each one is assigned to a group automatically), or use "Set budget for all".
 3. **Vouchers**: generate codes for each value.
-4. **Printables**: open the gift card sheets (16 per A4, rounded up with blank backups) and voucher tear-off strips, then print at 100% scale with background graphics on.
+4. **Printables**: open the gift card sheets (12 per A4, rounded up with blank backups) and voucher tear-off strips, then print at 100% scale with background graphics on.
 5. **Overview → Start a new lesson**: clears last time's orders, makes vouchers usable again and refills cards.
 
 ## Pricing

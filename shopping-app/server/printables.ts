@@ -3,7 +3,7 @@
 import type { DB } from "./db";
 import { getSettings } from "./catalog";
 
-const CARDS_PER_SHEET = 16; // 4 × 4 on landscape A4
+const CARDS_PER_SHEET = 12; // 4 × 3 on landscape A4
 const STRIPS_PER_ROW = 10; // 2 rows per portrait A4
 
 const esc = (s: string) =>
@@ -96,7 +96,7 @@ body { -webkit-print-color-adjust: exact; print-color-adjust: exact;
        font-family: Nunito, "Helvetica Neue", Arial, sans-serif; color: #4a3438; }
 /* 6mm page margin keeps cards inside every printer's printable area */
 .sheet { width: 297mm; height: 210mm; padding: 6mm; display: grid; background: #fff;
-         grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr);
+         grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
          break-after: page; overflow: hidden; }
 .sheet:last-child { break-after: auto; }
 .card { position: relative; outline: 0.2mm dashed #bdbdbd; outline-offset: -0.1mm;
