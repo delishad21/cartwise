@@ -1,1 +1,0 @@
-Code.gs in this folder is used for integration with google sheets. It requires a setup of a google apps script web app linked to a google sheet. Columns will be dynamically generated based on form submissions.

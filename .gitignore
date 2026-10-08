@@ -1,4 +1,6 @@
 .env
-/shopping-app/public/stores
+/shopping-app/seed
+/shopping-app/data
 /shopping-app/public/img
 .env.*
+printables/

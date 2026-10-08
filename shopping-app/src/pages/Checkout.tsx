@@ -19,16 +19,17 @@ import CheckoutFormDialog, {
   type CheckoutFormValues,
 } from "../components/CheckoutFormDialog";
 import { useStoresList } from "../lib/useStores";
-import type { DiscountCode } from "../lib/useStores";
-import { APPS_SCRIPT_URL } from "../lib/config";
+import {
+  applyDiscountCodes,
+  normaliseCode,
+  type DiscountCode,
+} from "../lib/quote";
 import PaymentDialog from "../components/PaymentDialog";
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function Checkout() {
   const { lines, clear } = useCart();
   const clearStore = useCart((s) => s.clearStore);
-  const { classes, discountCodes, discountCap } = useStoresList();
+  const { classes, discountCap } = useStoresList();
   const nav = useNavigate();
 
   // ----- Cart --> per-store pricing -----
@@ -79,74 +80,67 @@ export default function Checkout() {
           originalLineTotal: pi.originalLineTotal,
           finalLineTotal: pi.finalLineTotal,
           discounts: pi.discounts ?? [],
-          lineTotal: pi.finalLineTotal, // what Apps Script expects
+          lineTotal: pi.finalLineTotal,
         }))
       ),
     [calcByStore]
   );
 
-  // ----- Overall discount codes -----
+  // ----- Overall discount codes (checked against the server) -----
   const [codeInput, setCodeInput] = useState("");
-  const [appliedCodes, setAppliedCodes] = useState<string[]>([]);
-  const [codeError, setCodeError] = useState<string | null>(null);
-
-  const normalise = (s: string) => s.trim().toLowerCase();
-
-  const appliedCodeObjects = useMemo(
-    () =>
-      appliedCodes
-        .map(
-          (c) =>
-            discountCodes.find((dc) => normalise(dc.code) === normalise(c)) as
-              | DiscountCode
-              | undefined
-        )
-        .filter((x): x is DiscountCode => Boolean(x)),
-    [appliedCodes, discountCodes]
+  const [appliedCodeObjects, setAppliedCodeObjects] = useState<DiscountCode[]>(
+    []
   );
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [checkingCode, setCheckingCode] = useState(false);
 
-  const handleApplyCode = () => {
-    const raw = codeInput.trim();
+  const handleApplyCode = async () => {
+    const raw = normaliseCode(codeInput);
     if (!raw) {
       setCodeError("Enter a discount code");
       return;
     }
-    const match = discountCodes.find(
-      (dc) => normalise(dc.code) === normalise(raw)
-    );
-    if (!match) {
-      setCodeError("Code not recognised");
-      return;
-    }
-    if (appliedCodes.some((c) => normalise(c) === normalise(match.code))) {
+    if (appliedCodeObjects.some((c) => c.code === raw)) {
       setCodeError("Code already applied");
       return;
     }
-    if (match.kind === "percent") {
-      const alreadyPercent = appliedCodes.some((code) => {
-        const dc = discountCodes.find(
-          (d) => normalise(d.code) === normalise(code)
-        );
-        return dc?.kind === "percent";
+
+    setCheckingCode(true);
+    try {
+      const res = await fetch("/api/vouchers/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: raw }),
       });
-      if (alreadyPercent) {
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setCodeError(body?.message ?? "Could not check that code");
+        return;
+      }
+      const match = body as DiscountCode;
+      if (
+        match.kind === "percent" &&
+        appliedCodeObjects.some((c) => c.kind === "percent")
+      ) {
         setCodeError("Only one percentage discount can be used");
         return;
       }
+      setAppliedCodeObjects((prev) => [...prev, match]);
+      setCodeInput("");
+      setCodeError(null);
+    } catch {
+      setCodeError("Could not check that code. Please try again.");
+    } finally {
+      setCheckingCode(false);
     }
-    setAppliedCodes((prev) => [...prev, match.code]);
-    setCodeInput("");
-    setCodeError(null);
   };
 
   const handleRemoveCode = (code: string) => {
-    setAppliedCodes((prev) =>
-      prev.filter((c) => normalise(c) !== normalise(code))
-    );
+    setAppliedCodeObjects((prev) => prev.filter((c) => c.code !== code));
     setCodeError(null);
   };
 
-  // Compute stacked discounts with a global cap
+  // Stacked discounts with a global cap (same maths the server charges)
   const {
     grandBeforeCodes,
     percentCode,
@@ -154,92 +148,22 @@ export default function Checkout() {
     absoluteDiscountAmount,
     grandAfterCodes,
     capApplied,
-  } = useMemo(() => {
-    const grandBefore = round2(grandTotalRaw);
-
-    if (grandBefore <= 0 || appliedCodeObjects.length === 0) {
-      return {
-        grandBeforeCodes: grandBefore,
-        percentCode: undefined as DiscountCode | undefined,
-        percentDiscountAmount: 0,
-        absoluteDiscountAmount: 0,
-        grandAfterCodes: grandBefore,
-        capApplied: false,
-      };
-    }
-
-    let pc: DiscountCode | undefined;
-    const absCodes: DiscountCode[] = [];
-    for (const dc of appliedCodeObjects) {
-      if (dc.kind === "percent") pc = dc;
-      else absCodes.push(dc);
-    }
-
-    const rawPercentAmt =
-      pc && pc.amount > 0 ? round2((grandBefore * pc.amount) / 100) : 0;
-
-    const rawAbsTotal = absCodes.reduce(
-      (sum, dc) => sum + Math.max(0, dc.amount),
-      0
-    );
-
-    const capAbsValue =
-      discountCap && typeof discountCap.absoluteMax === "number"
-        ? Math.max(0, discountCap.absoluteMax)
-        : Number.POSITIVE_INFINITY;
-
-    const capPercentValue =
-      discountCap && typeof discountCap.percentMax === "number"
-        ? Math.max(0, (grandBefore * discountCap.percentMax) / 100)
-        : Number.POSITIVE_INFINITY;
-
-    const maxAllowedTotal = Math.min(grandBefore, capAbsValue, capPercentValue);
-
-    let usedPercent = rawPercentAmt;
-    let usedAbs = rawAbsTotal;
-    let capWasApplied = false;
-
-    if (rawPercentAmt + rawAbsTotal > maxAllowedTotal) {
-      capWasApplied = true;
-      const totalCap = maxAllowedTotal;
-      usedPercent = Math.min(rawPercentAmt, totalCap);
-      const remainingCap = totalCap - usedPercent;
-      usedAbs = Math.min(rawAbsTotal, Math.max(0, remainingCap));
-    }
-
-    const grandAfter = round2(Math.max(0, grandBefore - usedPercent - usedAbs));
-
-    return {
-      grandBeforeCodes: grandBefore,
-      percentCode: pc,
-      percentDiscountAmount: usedPercent,
-      absoluteDiscountAmount: usedAbs,
-      grandAfterCodes: grandAfter,
-      capApplied: capWasApplied,
-    };
-  }, [grandTotalRaw, appliedCodeObjects, discountCap]);
-
-  const overallDiscounts =
-    appliedCodeObjects.length === 0 &&
-    percentDiscountAmount === 0 &&
-    absoluteDiscountAmount === 0
-      ? undefined
-      : {
-          grandTotalBeforeDiscounts: grandBeforeCodes,
-          grandTotalAfterDiscounts: grandAfterCodes,
-          percentDiscountAmount,
-          absoluteDiscountAmount,
-          appliedCodes: appliedCodeObjects.map((dc) => ({
-            code: dc.code,
-            kind: dc.kind,
-            amount: dc.amount,
-            description: dc.description ?? "",
-          })),
-          capApplied,
-          configuredCap: discountCap ?? null,
-        };
+  } = useMemo(
+    () => applyDiscountCodes(grandTotalRaw, appliedCodeObjects, discountCap),
+    [grandTotalRaw, appliedCodeObjects, discountCap]
+  );
 
   const effectiveGrandTotal = grandAfterCodes;
+
+  const cartLines = useMemo(
+    () =>
+      Object.entries(lines).flatMap(([storeId, skus]) =>
+        Object.entries(skus)
+          .filter(([, qty]) => qty > 0)
+          .map(([sku, qty]) => ({ storeId, sku, qty }))
+      ),
+    [lines]
+  );
 
   // ----- New flow state: details first, payment second -----
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -322,8 +246,9 @@ export default function Checkout() {
                 variant="outlined"
                 size="medium"
                 onClick={handleApplyCode}
+                disabled={checkingCode}
               >
-                Apply
+                {checkingCode ? "Checking…" : "Apply"}
               </Button>
             </Box>
 
@@ -428,26 +353,14 @@ export default function Checkout() {
         classes={classes}
       />
 
-      {/* 2) Payment modal (does Apps Script POST) */}
+      {/* 2) Payment modal (server re-prices, charges the card, uses the codes) */}
       <PaymentDialog
         open={payOpen && !!buyer}
         onClose={() => setPayOpen(false)}
         amount={effectiveGrandTotal}
-        appsScriptUrl={APPS_SCRIPT_URL}
-        items={richItems}
-        perStoreTotals={Object.values(calcByStore).map((s) => ({
-          storeId: s.store.id,
-          storeName: s.store.name,
-          itemsSubtotal: s.totals.itemsSubtotal,
-          itemsDiscount: s.totals.itemsDiscount,
-          itemsNet: s.totals.itemsNet,
-          shippingBase: s.totals.shippingBase,
-          shippingDiscount: s.totals.shippingDiscount,
-          shippingNet: s.totals.shippingNet,
-          gst: s.totals.gst,
-          storeTotal: s.totals.storeTotal,
-        }))}
-        overallDiscounts={overallDiscounts}
+        lines={cartLines}
+        codes={appliedCodeObjects.map((c) => c.code)}
+        onCodeRejected={handleRemoveCode}
         buyer={buyer ?? { name: "", className: "", justifications: [] }}
         onPaid={(payload) => {
           localStorage.setItem("last-order", JSON.stringify(payload));

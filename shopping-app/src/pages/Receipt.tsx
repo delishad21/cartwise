@@ -137,7 +137,7 @@ export default function Receipt() {
               <strong>Name:</strong> {payload.name}
             </Typography>
             <Typography>
-              <strong>Class:</strong> {payload.className}
+              <strong>Group:</strong> {payload.className}
             </Typography>
           </Box>
           <Chip

@@ -1,6 +1,7 @@
 // src/lib/useStores.ts
 import { useEffect, useMemo, useState } from "react";
 import type { Store } from "./types";
+import type { DiscountCap } from "./quote";
 
 export type StoreListItem = { id: string; name: string; cover?: string };
 
@@ -9,26 +10,13 @@ export type SiteAlert = {
   severity?: "info" | "success" | "warning" | "error";
 };
 
-export type DiscountCode = {
-  code: string;
-  kind: "percent" | "absolute";
-  amount: number;
-  description?: string;
-};
-
-export type DiscountCap = {
-  percentMax?: number; // max % off grand total (e.g. 25 → 25%)
-  absoluteMax?: number; // max absolute dollars off
-};
-
-type StoresIndex = {
+type SiteInfo = {
   title?: string;
   gst?: number;
   classes?: string[];
   alerts?: SiteAlert[];
   stores?: StoreListItem[];
-  discountCodes?: DiscountCode[];
-  discountCap?: DiscountCap;
+  discountCap?: DiscountCap | null;
 };
 
 export function useStoresList() {
@@ -37,7 +25,6 @@ export function useStoresList() {
   const [classes, setClasses] = useState<string[]>([]);
   const [gstRate, setGstRate] = useState(0.09);
   const [siteAlerts, setSiteAlerts] = useState<SiteAlert[]>([]);
-  const [discountCodes, setDiscountCodes] = useState<DiscountCode[]>([]);
   const [discountCap, setDiscountCap] = useState<DiscountCap | null>(null);
 
   useEffect(() => {
@@ -45,31 +32,16 @@ export function useStoresList() {
 
     (async () => {
       try {
-        const res = await fetch("/stores/index.json", { signal: ac.signal });
-        if (!res.ok)
-          throw new Error(`Failed to load index.json (${res.status})`);
-        const json: StoresIndex | StoreListItem[] = await res.json();
+        const res = await fetch("/api/site", { signal: ac.signal });
+        if (!res.ok) throw new Error(`Failed to load site (${res.status})`);
+        const json: SiteInfo = await res.json();
 
-        if (Array.isArray(json)) {
-          // old format
-          setStores(json);
-          setSiteTitle("School Cart");
-          setClasses([]);
-          setGstRate(0.09);
-          setSiteAlerts([]);
-          setDiscountCodes([]);
-          setDiscountCap(null);
-        } else {
-          setStores(json.stores ?? []);
-          setSiteTitle(json.title ?? "School Cart");
-          setClasses(json.classes ?? []);
-          setGstRate(typeof json.gst === "number" ? json.gst : 0.09);
-          setSiteAlerts(Array.isArray(json.alerts) ? json.alerts : []);
-          setDiscountCodes(
-            Array.isArray(json.discountCodes) ? json.discountCodes : []
-          );
-          setDiscountCap(json.discountCap ?? null);
-        }
+        setStores(json.stores ?? []);
+        setSiteTitle(json.title ?? "School Cart");
+        setClasses(json.classes ?? []);
+        setGstRate(typeof json.gst === "number" ? json.gst : 0.09);
+        setSiteAlerts(Array.isArray(json.alerts) ? json.alerts : []);
+        setDiscountCap(json.discountCap ?? null);
       } catch (e) {
         if ((e as any)?.name !== "AbortError") {
           console.error(e);
@@ -78,7 +50,6 @@ export function useStoresList() {
           setClasses([]);
           setGstRate(0.09);
           setSiteAlerts([]);
-          setDiscountCodes([]);
           setDiscountCap(null);
         }
       }
@@ -93,7 +64,6 @@ export function useStoresList() {
     classes,
     gstRate,
     siteAlerts,
-    discountCodes,
     discountCap,
   };
 }
@@ -113,7 +83,9 @@ export function useStore(id?: string) {
 
     (async () => {
       try {
-        const res = await fetch(`/stores/${id}.json`, { signal: ac.signal });
+        const res = await fetch(`/api/stores/${encodeURIComponent(id)}`, {
+          signal: ac.signal,
+        });
         if (!res.ok) {
           setError(`Store "${id}" not found (HTTP ${res.status})`);
           setLoading(false);

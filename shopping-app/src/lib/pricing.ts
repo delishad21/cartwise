@@ -9,6 +9,13 @@ function sumDiscounts(i: PricedItem) {
   return round2(i.discounts.reduce((a, d) => a + d.amount, 0));
 }
 
+function nthFormat(n: number): string {
+  if (n % 10 === 1 && n % 100 !== 11) return n + "st";
+  if (n % 10 === 2 && n % 100 !== 12) return n + "nd";
+  if (n % 10 === 3 && n % 100 !== 13) return n + "rd";
+  return n + "th";
+}
+
 /**
  * GST is computed on ITEMS ONLY.
  * Final total = itemsNet + gst + shippingNet
@@ -75,7 +82,7 @@ export function priceStore(
         if (!item) continue;
         item.discounts.push({
           kind: "nthItemPercent",
-          label: `Nth item ${nthRule.percentOff}% off`,
+          label: `${nthRule.percentOff}% off (${nthFormat(nthRule.nth)} item)`,
           amount: amt,
         });
         nthAppliedUnits.push({

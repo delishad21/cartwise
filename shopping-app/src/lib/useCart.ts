@@ -1,6 +1,13 @@
 // src/lib/useCart.ts
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+
+// Cart is in-memory only so shared devices don't carry over a previous
+// user's cart. Clear the cart that older versions persisted.
+try {
+  localStorage.removeItem("school-cart");
+} catch {
+  // storage unavailable (e.g. private mode) — nothing to clear
+}
 
 type Lines = Record<string, Record<string, number>>;
 
@@ -61,52 +68,47 @@ function shallowEqualObject(
   return true;
 }
 
-export const useCart = create<State>()(
-  persist(
-    (set, get) => ({
-      lines: {},
+export const useCart = create<State>()((set, get) => ({
+  lines: {},
 
-      add: (storeId, sku, qty = 1) => {
-        const prev = get().lines;
-        const curQty = prev[storeId]?.[sku] ?? 0;
-        const nextQty = curQty + qty;
-        if (nextQty === curQty) return;
-        const next = setStoreQtyImmutable(prev, storeId, sku, nextQty);
-        if (next !== prev) set({ lines: next });
-      },
+  add: (storeId, sku, qty = 1) => {
+    const prev = get().lines;
+    const curQty = prev[storeId]?.[sku] ?? 0;
+    const nextQty = curQty + qty;
+    if (nextQty === curQty) return;
+    const next = setStoreQtyImmutable(prev, storeId, sku, nextQty);
+    if (next !== prev) set({ lines: next });
+  },
 
-      setQty: (storeId, sku, qty) => {
-        const prev = get().lines;
-        const curQty = prev[storeId]?.[sku];
-        if (curQty === qty) return;
-        const next = setStoreQtyImmutable(prev, storeId, sku, qty);
-        if (next !== prev) set({ lines: next });
-      },
+  setQty: (storeId, sku, qty) => {
+    const prev = get().lines;
+    const curQty = prev[storeId]?.[sku];
+    if (curQty === qty) return;
+    const next = setStoreQtyImmutable(prev, storeId, sku, qty);
+    if (next !== prev) set({ lines: next });
+  },
 
-      remove: (storeId, sku) => {
-        const prev = get().lines;
-        if (!prev[storeId] || !(sku in prev[storeId])) return;
-        const next = setStoreQtyImmutable(prev, storeId, sku, 0);
-        if (next !== prev) set({ lines: next });
-      },
+  remove: (storeId, sku) => {
+    const prev = get().lines;
+    if (!prev[storeId] || !(sku in prev[storeId])) return;
+    const next = setStoreQtyImmutable(prev, storeId, sku, 0);
+    if (next !== prev) set({ lines: next });
+  },
 
-      clearStore: (storeId) => {
-        const prev = get().lines;
-        if (!prev[storeId]) return;
-        const next: Lines = { ...prev };
-        delete next[storeId];
-        set({ lines: next });
-      },
+  clearStore: (storeId) => {
+    const prev = get().lines;
+    if (!prev[storeId]) return;
+    const next: Lines = { ...prev };
+    delete next[storeId];
+    set({ lines: next });
+  },
 
-      clear: () => {
-        const prev = get().lines;
-        if (Object.keys(prev).length === 0) return;
-        set({ lines: {} });
-      },
-    }),
-    { name: "school-cart" }
-  )
-);
+  clear: () => {
+    const prev = get().lines;
+    if (Object.keys(prev).length === 0) return;
+    set({ lines: {} });
+  },
+}));
 
 const EMPTY_OBJ: Readonly<Record<string, number>> = Object.freeze({});
 

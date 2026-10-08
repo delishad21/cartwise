@@ -1,192 +1,131 @@
 # multi-store-shopping-site
 
-Simple JSON data based shopping site built with React.
-Used for conducting lessons in primary schools to learn about budgetting, sums and percentages.
+A pretend multi-store shop, used in primary school lessons on budgeting, sums and percentages. Groups get a gift card with a budget, buy bicycle parts across several stores (each with its own discounts, shipping and GST), and justify their picks. A password-protected teacher dashboard at `/admin` shows the orders as they come in and manages everything else.
 
-To quickly start up the project:
+## How it fits together
 
-1. Clone the repository
-2. cd into the /shopping-app directory
-3. Run `npm install` to install dependencies
-4. Run `npm start` to start the development server
-5. Under /shopping-app/public, change sample-img folder name to 'img' and sample-stores folder name to 'stores'
-6. Open `http://localhost:5173` in your browser to view the app
+One Node process (`shopping-app/server`) serves:
 
-## Pricing & Store Data Guide
+- **the shop**: the React app in `shopping-app/src`.
+- **`/api`**: store data, voucher checks and checkout. The server re-prices every order with the same `src/lib/pricing.ts` and `src/lib/quote.ts` the browser uses. In one transaction, it uses up the voucher codes, charges the gift card and records the order. Codes and card numbers are never sent to students' browsers.
+- **`/admin`**: the teacher dashboard.
+  - Live orders, with void & refund and CSV export
+  - Voucher codes (single use, generate, reset)
+  - Gift cards (balances, group assignment, generate)
+  - Stores, items and photos
+  - Printable gift card and voucher sheets
+  - Settings, and "reset for a new lesson"
 
-This section explains how the pricing engine works (priceStore), the order of operations (discounts, shipping, GST), and how to add your own store JSON so the app can render products, discounts, alerts, and classes.
+Data lives in SQLite (`shop.db` plus an `uploads/` folder of photos) in `DATA_DIR`. There's no Google Sheet any more. Download the orders CSV from `/admin` if you want a spreadsheet.
 
-### Overview
+### Rules the server enforces
 
-The app prices each store independently, then the checkout page sums up store totals into a grand total. For each store, we compute:
+- A voucher code works **once**, across all groups. "Make usable again" in `/admin` releases it.
+- Only one percentage voucher per order. Dollar vouchers stack, up to the discount cap in Settings.
+- A gift card's balance goes down as it's spent. A card assigned to a group can only be used by that group.
+- At most `maxQtyPerItem` of each item. The group must be one from the list in Settings.
 
-- `itemsSubtotal` — sum of price × qty for all cart lines
-- `itemsDiscount` — total discount applied on items (all item-level rules)
-- `itemsNet` — itemsSubtotal - itemsDiscount
-- `shippingBase` — the store’s base shipping fee
-- `shippingDiscount` — discount on shipping (e.g., free shipping threshold)
-- `shippingNet` — shippingBase - shippingDiscount (min 0)
-- `gst` — GST (9%) on (itemsNet + shippingNet)
-- `storeTotal` — itemsNet + shippingNet + gst
+## Running it
 
-All money values are rounded to 2 decimals (banker’s rounding not required; simple Math.round(n\*100)/100).
+Requires Node 22.13+ (it uses the built-in `node:sqlite`).
 
-### Supported DiscountRules
+```bash
+cd shopping-app
+npm install
+echo "ADMIN_PASSWORD=pick-something" > .env
 
-1. `nthItemPercent`: Apply % off to every N-th unit across the whole cart (store-scoped), counting per unit ordered (not per SKU).
+npm run dev:server   # API on :3000 (restarts on change)
+npm run dev          # shop on http://localhost:5173 (proxies /api to :3000)
+```
 
-   `{ type: "nthItemPercent"; nth: number; percentOff: number }`
+On first start, the server imports `shopping-app/seed/*.json` into an empty database (see [Seed data](#seed-data)). For a demo without real data, copy `seed.sample/` to `seed/` and `public/sample-img/` to `public/img/`.
 
-2. `overallPercent`: Apply a flat percent off after the nthItemPercent rule on the items net (not shipping).
+### Deploying (Docker)
 
-   `{ type: "overallPercent"; percentOff: number }`
+```bash
+cd shopping-app
+echo "ADMIN_PASSWORD=pick-something" > .env
+docker compose up -d --build
+```
 
-3. `shippingThreshold`: If itemsNet >= threshold, discount shipping by shippingPercentOff.
+- The container listens on **port 3000** and keeps its database in the `bike-shop-data` volume.
+- `seed/` and `public/img/` are gitignored, so build from a checkout that has them.
+- `nginx/bike-shop.conf` is a sample reverse proxy (TLS, plus a 10 MB upload limit for product photos).
 
-   `{ type: "shippingThreshold"; threshold: number; shippingPercentOff: number }`
+Environment variables:
 
-The order of application is:
+| Variable         | Default  | Purpose                                         |
+| ---------------- | -------- | ----------------------------------------------- |
+| `ADMIN_PASSWORD` | _(none)_ | Password for `/admin`. If unset, `/admin` is off. |
+| `PORT`           | `3000`   |                                                 |
+| `DATA_DIR`       | `data`   | Where `shop.db` and `uploads/` live             |
+| `SEED_DIR`       | `seed`   | JSON imported when the database is empty        |
+| `STATIC_DIR`     | `dist`   | Built shop to serve                             |
 
-1. Sum items → itemsSubtotal
-2. Apply nthItemPercent → increase itemsDiscount
-3. Apply overallPercent on itemsNet → increase itemsDiscount
-4. Evaluate shippingThreshold against current itemsNet
-5. Compute shippingNet, then gst = 9% × (itemsNet + shippingNet)
-6. storeTotal = itemsNet + shippingNet + gst
+## Before each lesson
 
-### Index JSON
+In `/admin`:
 
-/public/stores/index.json drives the gallery tabs and (optionally) your class list and site title:
+1. **Settings**: set the groups (e.g. "Make groups 1 to 55"), the gift card "From" and "Valid until" lines, and the discount cap.
+2. **Gift Cards**: generate one card per group (each one is assigned to a group automatically), or use "Set budget for all".
+3. **Vouchers**: generate codes for each value.
+4. **Printables**: open the gift card sheets (16 per A4, rounded up with blank backups) and voucher tear-off strips, then print at 100% scale with background graphics on.
+5. **Overview → Start a new lesson**: clears last time's orders, makes vouchers usable again and refills cards.
 
-Example:
+## Pricing
 
-```json
-{
-  "title": "School Cart",
-  "alerts": [
-    {
-      "message": "Welcome to School Cart! Check out our latest discounts.",
-      "severity": "info"
-    }
-  ],
-  "discountCodes": [
-    {
-      "code": "WELCOME10",
-      "kind": "percent",
-      "amount": 10,
-      "description": "10% off the whole order"
-    },
-    {
-      "code": "MINUS5",
-      "kind": "absolute",
-      "amount": 5,
-      "description": "S$5 off the grand total"
-    }
-  ],
-  "classes": ["Class 1", "Class 2", "Class 3"],
-  "stores": [
-    { "id": "store-1", "name": "Store 1" },
-    { "id": "store-2", "name": "Store 2" }
-  ],
-  "discountCap": {
-    "percentMax": 100,
-    "absoluteMax": 250
+Each store is priced separately, then the store totals are summed and voucher codes are applied to the grand total.
+
+For each store:
+
+1. `itemsSubtotal`: sum of price × qty.
+2. **Every Nth item % off** (`nthItemPercent`): for every N units in the cart, the cheapest unit gets the discount.
+3. **Storewide % off** (`overallPercent`): applied after step 2, spread across the items.
+4. **Shipping**: if the items total (after discounts) is at least `threshold`, shipping is reduced by `shippingPercentOff` (100 = free).
+5. **GST** (9% by default) on the **items only**, not shipping.
+6. `storeTotal = itemsNet + gst + shippingNet`.
+
+Money is rounded to 2 decimals at each step.
+
+Voucher codes are then applied to the sum of the store totals. The combined discount is capped by `discountCap.absoluteMax` (dollars) and `discountCap.percentMax` (% of the total), and can never exceed the total itself.
+
+## Seed data
+
+`shopping-app/seed/` holds the data that gets imported into a fresh database. After that, `/admin` is the source of truth.
+
+- `index.json`: settings, the store list and voucher codes:
+  ```json
+  {
+    "title": "School Cart",
+    "gst": 0.09,
+    "classes": ["1", "2", "3"],
+    "alerts": [{ "message": "Welcome!", "severity": "info" }],
+    "discountCap": { "percentMax": 100, "absoluteMax": 250 },
+    "discountCodes": [{ "code": "WELCOME10", "kind": "absolute", "amount": 10, "description": "S$10 off" }],
+    "stores": [{ "id": "rodalink", "name": "Rodalink", "cover": "/img/covers/rodalink.jpg" }],
+    "giftCardFrom": "Runner Tan",
+    "giftCardValidUntil": "31 December 2026"
   }
-}
-```
+  ```
+- `{storeId}.json`: one per store:
+  ```json
+  {
+    "id": "rodalink",
+    "name": "Rodalink",
+    "showDiscountBreakdown": true,
+    "alerts": [{ "message": "18% storewide discount applied at checkout.", "severity": "success" }],
+    "shipping": { "baseFee": 35 },
+    "constraints": { "maxQtyPerItem": 3 },
+    "discounts": [
+      { "type": "overallPercent", "percentOff": 18 },
+      { "type": "shippingThreshold", "threshold": 100, "shippingPercentOff": 100 }
+    ],
+    "products": [{ "sku": "bell", "name": "Bell", "price": 15, "img": "/img/rodalink/bell.png" }]
+  }
+  ```
+- `cards.json`: gift cards. `group` is optional; leave it out and any group can use the card.
+  ```json
+  { "cards": [{ "number": "777700000001", "group": "1", "balance": 1300 }] }
+  ```
 
-- `title` appears in the AppBar.
-- `classes` populates the class dropdown in the checkout dialog.
-- `stores[]` controls the tabs and landing gallery cards.
-- `alerts[]` (optional) array of alert messages to show at the top of the gallery page
-  - `severity`: "info" | "warning" | "error" | "success"
-- `discountCodes[]` (optional) array of discount codes that users can apply at checkout
-  - `code`: the code string users enter
-  - `kind`: "percent" | "absolute"
-  - `amount`: number representing percent or absolute amount
-  - `description`: short description of the discount code
-- `discountCap` (optional) object to cap total discount amounts from discount codes
-  - `percentMax`: maximum total percent discount from all percent-type discount codes
-  - `absoluteMax`: maximum total absolute discount from all absolute-type discount codes
-
-### Store JSON
-
-Each store JSON is located at `/public/stores/{storeId}.json` and defines products, discounts, and alerts for that store.
-
-Example:
-
-```json
-{
-  "id": "rodalink",
-  "name": "Rodalink",
-  "showDiscountBreakdown": true,
-  "alerts": [
-    {
-      "message": "18% storewide discount applied at checkout.",
-      "severity": "success"
-    },
-    {
-      "message": "Free shipping above S$100. Base shipping S$35.",
-      "severity": "info"
-    }
-  ],
-  "shipping": { "baseFee": 35 },
-  "constraints": { "maxQtyPerItem": 3 },
-  "discounts": [
-    { "type": "overallPercent", "percentOff": 18 },
-    { "type": "shippingThreshold", "threshold": 100, "shippingPercentOff": 100 }
-  ],
-  "products": [
-    {
-      "sku": "basket",
-      "name": "Basket",
-      "price": 52,
-      "img": "/img/rodalink/basket.png"
-    },
-    {
-      "sku": "bell",
-      "name": "Bell",
-      "price": 15,
-      "img": "/img/rodalink/bell.png"
-    },
-    {
-      "sku": "frame",
-      "name": "Frame",
-      "price": 2199,
-      "img": "/img/rodalink/frame.png"
-    }
-  ]
-}
-```
-
-Each store JSON supports:
-
-- `id`: store identifier
-- `name`: store display name
-- `showDiscountBreakdown`: boolean to control whether per-item discount breakdowns are shown (Used for educational purposes to demonstrate discount calculations)
-- `alerts[]`: array of alert messages to show at the top of the store page
-  - `severity`: "info" | "warning" | "error" | "success"
-- `shipping`: object with `baseFee` number
-- `constraints`: object with `maxQtyPerItem` number
-- `discounts[]`: array of DiscountRule objects as described above
-- `products[]`: array of Product objects with `sku`, `name`, `price` and `img` path
-
-### Cards JSON
-
-This application also supports mock gift cards for payment testing. These are located at `/public/stores/cards.json`.
-
-Example:
-
-```json
-{
-  "cards": [
-    { "number": "777700000001", "balance": 100.0 },
-    { "number": "777700000002", "balance": 50.0 }
-  ]
-}
-```
-
-Each card object supports:
-
-- `number`: card number string
-- `balance`: number representing available balance on the card
+`showDiscountBreakdown: false` hides the per-item discount lines, so students have to work the discounts out themselves.

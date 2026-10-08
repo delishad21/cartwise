@@ -1,12 +1,20 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
+import {
+  ThemeProvider,
+  createTheme,
+  CssBaseline,
+  LinearProgress,
+} from "@mui/material";
 import App from "./App";
 import Gallery from "./pages/Gallery";
 import StorePage from "./pages/StorePage";
 import Checkout from "./pages/Checkout";
 import Receipt from "./pages/Receipt";
+
+// the dashboard is only downloaded by people who open /admin
+const AdminRoot = lazy(() => import("./admin/AdminRoot"));
 
 const router = createBrowserRouter([
   {
@@ -18,6 +26,14 @@ const router = createBrowserRouter([
       { path: "checkout", element: <Checkout /> },
       { path: "receipt", element: <Receipt /> },
     ],
+  },
+  {
+    path: "/admin/*",
+    element: (
+      <Suspense fallback={<LinearProgress />}>
+        <AdminRoot />
+      </Suspense>
+    ),
   },
 ]);
 
