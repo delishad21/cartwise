@@ -42,14 +42,16 @@ On first start, the server imports `shopping-app/seed/*.json` into an empty data
 
 ### Deploying (Docker)
 
+The production stack is [compose.yaml](compose.yaml) at the repo root; devbot builds and runs it on the home server. See [deploy/README.md](deploy/README.md).
+
 ```bash
-cd shopping-app
 echo "ADMIN_PASSWORD=pick-something" > .env
-docker compose up -d --build
+docker compose up -d --build   # http://127.0.0.1:8293
 ```
 
-- The container listens on **port 3000** and keeps its database in the `bike-shop-data` volume.
-- `seed/` and `public/img/` are gitignored, so build from a checkout that has them.
+- The container listens on **port 3000** (published on 127.0.0.1:8293) and keeps its database, uploads and product photos (`img/`) in the `bike-shop-data` volume.
+- `seed/` and `public/img/` are gitignored. `/img/...` is served from `DATA_DIR/img` first, then from the built site.
+- `GET /api/health` answers `{"ok":true}` when the server and database are up.
 - `nginx/bike-shop.conf` is a sample reverse proxy (TLS, plus a 10 MB upload limit for product photos).
 
 Environment variables:

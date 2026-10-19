@@ -7,6 +7,12 @@ import { ApiError } from "../errors";
 import { checkVoucher, orderSchema, placeOrder } from "../orders";
 
 export function publicRoutes(app: FastifyInstance, db: DB) {
+  // For the deploy's health check: the process is up and the database answers.
+  app.get("/api/health", async () => {
+    db.prepare("SELECT 1").get();
+    return { ok: true };
+  });
+
   app.get("/api/site", async () => {
     const s = getSettings(db);
     return {

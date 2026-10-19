@@ -2,5 +2,7 @@ node_modules
 dist
 dist-server
 data
-.env
-.env.*
+# env files anywhere in the tree, never baked into an image
+**/.env
+**/.env.*
+!**/.env.example

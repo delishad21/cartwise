@@ -1,0 +1,36 @@
+# Production stack on the home server, deployed by devbot (see deploy/README.md).
+# Took over from Portainer stack 34: same project, service, container, volume
+# and port, so the data and the nginx site (bicycle-shop.conf) carry over.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  bike-shop:
+    build: ./shopping-app
+    image: bike-shop-bike-shop:${REVISION:-dev}
+    container_name: bike-shop
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8293:3000"   # host nginx proxies here
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}   # from the server's .env; /admin is off without it
+    volumes:
+      - bike-shop-data:/data   # SQLite database, uploaded photos, product images (img/)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    logging: *logging
+
+volumes:
+  # No backup label on purpose: the volume already exists (Portainer created it),
+  # labels can't be added to an existing volume, and changing its config makes
+  # compose offer to recreate it. The nightly dump already covers it through
+  # LEGACY_VOLUMES (bike-shop_bike-shop-data) in ~/services/backup/app-dump.sh.
+  bike-shop-data:

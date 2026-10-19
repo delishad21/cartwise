@@ -65,6 +65,17 @@ await app.register(fastifyMultipart,{ limits: { fileSize: 8 * 1024 * 1024, files
 publicRoutes(app, db);
 adminRoutes(app, db, UPLOADS_DIR);
 
+// Product photos and store covers (/img/...): the data volume's copy wins, so
+// a deploy doesn't need the gitignored public/img in the image.
+const IMG_DIR = path.join(DATA_DIR, "img");
+mkdirSync(IMG_DIR, { recursive: true });
+await app.register(fastifyStatic, {
+  root: [IMG_DIR, path.join(STATIC_DIR, "img")].filter((dir) => existsSync(dir)),
+  prefix: "/img/",
+  decorateReply: false,
+  maxAge: "1h",
+});
+
 await app.register(fastifyStatic, {
   root: UPLOADS_DIR,
   prefix: "/uploads/",
@@ -93,7 +104,7 @@ if (hasClient) {
 
 // Client-side routes (/store/x, /checkout, /admin/...) all load the SPA.
 app.setNotFoundHandler((req, reply) => {
-  const isPage = req.method === "GET" && !req.url.startsWith("/api/") && !req.url.startsWith("/uploads/");
+  const isPage = req.method === "GET" && !req.url.startsWith("/api/") && !req.url.startsWith("/uploads/") && !req.url.startsWith("/img/");
   if (hasClient && isPage) {
     return reply.header("Cache-Control", "no-cache").sendFile("index.html", STATIC_DIR);
   }
