@@ -1,4 +1,4 @@
-# multi-store-shopping-site
+# Cartwise
 
 A pretend multi-store shop, used in primary school lessons on budgeting, sums and percentages. Groups get a gift card with a budget, buy bicycle parts across several stores (each with its own discounts, shipping and GST), and justify their picks. A password-protected teacher dashboard at `/admin` shows the orders as they come in and manages everything else.
 
