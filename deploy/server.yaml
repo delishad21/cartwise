@@ -1,0 +1,13 @@
+# How cartwise sits on the home server (devbot server plan / apply; DEPLOY.md "Server").
+# Written from the hand-made site it replaces (bicycle-shop.conf). Its /api/apps-script proxies to
+# Google Apps Script are dropped: the Node server replaced Apps Script and nothing calls them.
+host: shop.delishad.com
+port: 8293
+websockets: true
+max_body: 50000m
+health: /api/health
+exposure: public-sg
+dns: proxied
+auth: app
+teardown:
+  volumes: keep
