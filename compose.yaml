@@ -11,8 +11,8 @@ x-logging: &logging
 services:
   bike-shop:
     build: ./shopping-app
-    image: bike-shop-bike-shop:${REVISION:-dev}
-    container_name: bike-shop
+    image: cartwise-bike-shop:${REVISION:-dev}
+    container_name: cartwise
     restart: unless-stopped
     ports:
       - "127.0.0.1:8293:3000"   # host nginx proxies here
