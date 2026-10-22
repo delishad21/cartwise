@@ -4,6 +4,8 @@
 host: shop.delishad.com
 port: 8293
 websockets: true
+login_paths:
+  - /api/admin/login
 max_body: 50000m
 health: /api/health
 exposure: public-sg
