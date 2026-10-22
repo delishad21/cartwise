@@ -14,9 +14,10 @@ Deploying: say `ship <task>` or run `devbot deploy bike-shop`; `devbot rollback 
 - Health: `https://shop.delishad.com/api/health` (`{"ok":true}` once the database answers).
 - Data: everything lives in the `bike-shop_bike-shop-data` volume, mounted at `/data`:
   `shop.db` (SQLite), `uploads/` (photos added in /admin) and `img/` (the product
-  photos and store covers, see below). The nightly dump on the server tars it
-  (it's in `LEGACY_VOLUMES` in `~/services/backup/app-dump.sh`; the volume
-  predates the `backup` label, so keep that entry).
+  photos and store covers, see below). The nightly dump on the server tars it:
+  compose.yaml labels it `backup: "true"`, but the live volume predates the label
+  (Docker doesn't add labels to an existing volume), so it's also in `LEGACY_VOLUMES`
+  in `~/services/backup/app-dump.sh`; keep that entry.
 - nginx: the live site `/etc/nginx/sites-available/bicycle-shop.conf` stays as it
   is (it already proxies to 127.0.0.1:8293). [../nginx/bike-shop.conf](../nginx/bike-shop.conf)
   is only a generic sample.

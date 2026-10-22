@@ -29,8 +29,10 @@ services:
     logging: *logging
 
 volumes:
-  # No backup label on purpose: the volume already exists (Portainer created it),
-  # labels can't be added to an existing volume, and changing its config makes
-  # compose offer to recreate it. The nightly dump already covers it through
-  # LEGACY_VOLUMES (bike-shop_bike-shop-data) in ~/services/backup/app-dump.sh.
+  # Nightly backup. The live volume (cartwise_bike-shop-data) predates this label and
+  # Docker can't add labels to an existing volume, so compose reuses it as is (no
+  # recreate: it has no config hash) and it stays in LEGACY_VOLUMES in
+  # ~/services/backup/app-dump.sh until it's ever recreated.
   bike-shop-data:
+    labels:
+      backup: "true"
