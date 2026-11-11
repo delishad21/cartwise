@@ -25,10 +25,12 @@ import Grid from "@mui/material/Grid";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import DownloadIcon from "@mui/icons-material/Download";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import { money } from "../../lib/format";
 import { api, spacedCard, useApi, when, type AdminOrder } from "../api";
 import { ConfirmDialog, PageHeader } from "../components";
 import { useToast } from "../utils";
+import ReceiptDialog from "../ReceiptDialog";
 
 export default function Orders() {
   const { data, error, reload } = useApi<AdminOrder[]>("/api/admin/orders", 10_000);
@@ -36,6 +38,9 @@ export default function Orders() {
   const [showVoided, setShowVoided] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [voiding, setVoiding] = useState<AdminOrder | null>(null);
+  const [receiptId, setReceiptId] = useState<string | null>(null);
+  // look it up by id so the 10-second refresh (e.g. a void) shows in the open receipt
+  const receiptOrder = (receiptId && data?.find((o) => o.id === receiptId)) || null;
   const [toast, showToast] = useToast();
 
   const rows = useMemo(() => {
@@ -95,12 +100,13 @@ export default function Orders() {
                 <TableCell>Name</TableCell>
                 <TableCell>Vouchers</TableCell>
                 <TableCell align="right">Total</TableCell>
+                <TableCell align="right">Receipt</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={7}>
                     <Typography color="text.secondary" sx={{ py: 2 }} textAlign="center">
                       No orders yet.
                     </Typography>
@@ -136,11 +142,23 @@ export default function Orders() {
                     <TableCell align="right">
                       <strong>{money(o.total)}</strong>
                     </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      <Button
+                        size="small"
+                        startIcon={<ReceiptLongIcon />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReceiptId(o.id);
+                        }}
+                      >
+                        View receipt
+                      </Button>
+                    </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={6} sx={{ py: 0 }}>
+                    <TableCell colSpan={7} sx={{ py: 0 }}>
                       <Collapse in={open === o.id} unmountOnExit>
-                        <OrderDetail order={o} onVoid={() => setVoiding(o)} />
+                        <OrderDetail order={o} onVoid={() => setVoiding(o)} onReceipt={() => setReceiptId(o.id)} />
                       </Collapse>
                     </TableCell>
                   </TableRow>
@@ -168,12 +186,13 @@ export default function Orders() {
           showToast("Order voided and refunded");
         }}
       />
+      <ReceiptDialog order={receiptOrder} onClose={() => setReceiptId(null)} />
       {toast}
     </>
   );
 }
 
-function OrderDetail({ order, onVoid }: { order: AdminOrder; onVoid: () => void }) {
+function OrderDetail({ order, onVoid, onReceipt }: { order: AdminOrder; onVoid: () => void; onReceipt: () => void }) {
   const p = order.payload;
   const byStore = new Map<string, typeof p.items>();
   for (const i of p.items) byStore.set(i.storeName ?? i.storeId, [...(byStore.get(i.storeName ?? i.storeId) ?? []), i]);
@@ -254,6 +273,9 @@ function OrderDetail({ order, onVoid }: { order: AdminOrder; onVoid: () => void 
             <Line label="Gift card" value={spacedCard(order.cardNumber)} />
             <Line label="Card balance" value={`${money(p.paymentInfo.balanceBefore)} → ${money(p.paymentInfo.balanceAfter)}`} />
           </Stack>
+          <Button variant="contained" size="small" startIcon={<ReceiptLongIcon />} sx={{ mt: 2, mr: 1 }} onClick={onReceipt}>
+            View receipt
+          </Button>
           {!order.voidedAt ? (
             <Button color="error" variant="outlined" size="small" sx={{ mt: 2 }} onClick={onVoid}>
               Void & refund…
