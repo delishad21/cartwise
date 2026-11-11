@@ -64,7 +64,11 @@ const printStyles = (
           overflow: "visible !important",
           background: "#fff !important",
         },
-        [`.${ROOT} .MuiDialogContent-root`]: { overflow: "visible !important", padding: "0 !important" },
+        [`.${ROOT} .MuiDialogContent-root`]: {
+          display: "block !important",
+          overflow: "visible !important",
+          padding: "0 !important",
+        },
         // the present layout is sized for a projector; bring it down to paper size
         [`.${ROOT} .cw-receipt`]: { zoom: 0.72 },
         [`.${ROOT} .MuiPaper-root`]: { boxShadow: "none !important" },
@@ -105,7 +109,22 @@ export default function ReceiptDialog({ order, onClose }: { order: AdminOrder | 
       fullScreen={phone || full}
       className={ROOT}
       aria-labelledby="receipt-dialog-title"
-      slotProps={{ paper: { sx: { bgcolor: "grey.100", ...(!phone && !full && { height: "92vh" }) } } }}
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: "grey.100",
+            // md and up: near full screen, for the one-screen dashboard layout
+            ...(!phone &&
+              !full && {
+                height: { sm: "92vh", md: "calc(100% - 24px)" },
+                m: { md: 1.5 },
+                width: { md: "calc(100% - 24px)" },
+                maxWidth: { md: "none" },
+                maxHeight: { md: "calc(100% - 24px)" },
+              }),
+          },
+        },
+      }}
     >
       {order && printStyles}
       <Stack
@@ -154,9 +173,16 @@ export default function ReceiptDialog({ order, onClose }: { order: AdminOrder | 
           </Button>
         )}
       </Stack>
-      <DialogContent sx={{ p: { xs: 1.5, sm: 3, md: 4 } }}>
+      <DialogContent
+        sx={{
+          p: { xs: 1.5, sm: 3, md: 2 },
+          // md and up the dashboard fills the dialog; only its panels scroll
+          display: { md: "flex" },
+          overflowY: { md: "hidden" },
+        }}
+      >
         {shown && (
-          <Box sx={{ maxWidth: 1100, mx: "auto" }}>
+          <Box sx={{ maxWidth: { xs: 1100, md: "none" }, width: { md: "100%" }, mx: "auto" }}>
             <ReceiptView receipt={orderReceipt(shown)} variant="present" voidedAt={shown.voidedAt} />
           </Box>
         )}

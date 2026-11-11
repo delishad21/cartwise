@@ -101,17 +101,27 @@ export default function ReceiptView({ receipt, variant = "page", voidedAt }: Pro
       }),
     [outer]
   );
-  const body = <ReceiptBody receipt={receipt} variant={variant} voidedAt={voidedAt} />;
-  return variant === "present" ? <ThemeProvider theme={presentTheme}>{body}</ThemeProvider> : body;
+  if (variant !== "present") return <ReceiptBody receipt={receipt} variant={variant} voidedAt={voidedAt} />;
+  return (
+    <ThemeProvider theme={presentTheme}>
+      {/* Wide screens (md and up) get a one-screen dashboard; phones, narrow
+          windows and print keep the single column below. */}
+      <Box
+        className="cw-receipt-wide"
+        sx={{ display: { xs: "none", md: "flex" }, height: "100%", "@media print": { display: "none !important" } }}
+      >
+        <ReceiptDashboard receipt={receipt} voidedAt={voidedAt} />
+      </Box>
+      <Box sx={{ display: { md: "none" }, "@media print": { display: "block !important" } }}>
+        <ReceiptBody receipt={receipt} variant={variant} voidedAt={voidedAt} />
+      </Box>
+    </ThemeProvider>
+  );
 }
 
-function ReceiptBody({ receipt, variant, voidedAt }: Required<Pick<Props, "variant">> & Props) {
-  const present = variant === "present";
+/** The receipt's lists, keyed for lookup: items by SKU and by store. */
+function useReceiptParts(receipt: ReceiptData) {
   const items = useMemo(() => receipt.items ?? [], [receipt.items]);
-  const justifications = receipt.justifications ?? [];
-  const perStoreTotals = receipt.perStoreTotals ?? [];
-  const overall = receipt.overallDiscounts;
-  const showBreakdown = !receipt.breakdownSuppressed;
 
   const bySku = useMemo(() => {
     const m: Record<string, ReceiptItem> = {};
@@ -124,6 +134,22 @@ function ReceiptBody({ receipt, variant, voidedAt }: Required<Pick<Props, "varia
     for (const it of items) (m[it.storeName || it.storeId || "Store"] ??= []).push(it);
     return m;
   }, [items]);
+
+  return {
+    items,
+    bySku,
+    itemsByStore,
+    justifications: receipt.justifications ?? [],
+    perStoreTotals: receipt.perStoreTotals ?? [],
+    overall: receipt.overallDiscounts,
+    showBreakdown: !receipt.breakdownSuppressed,
+  };
+}
+
+function ReceiptBody({ receipt, variant, voidedAt }: Required<Pick<Props, "variant">> & Props) {
+  const present = variant === "present";
+  const { items, bySku, itemsByStore, justifications, perStoreTotals, overall, showBreakdown } =
+    useReceiptParts(receipt);
 
   const pad = present ? { xs: 2, sm: 3 } : 2;
   const thumb = present ? 80 : 64;
@@ -207,7 +233,7 @@ function ReceiptBody({ receipt, variant, voidedAt }: Required<Pick<Props, "varia
                   }}
                 >
                   <Box sx={{ gridRow: { sm: "span 2" } }}>
-                    <Thumb src={ref?.img} alt={name} size={{ xs: 72, sm: 120 }} radius={2} />
+                    <Thumb src={ref?.img} alt={name} size={{ xs: 72, sm: 120 }} radius={2} lazy={false} />
                   </Box>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.25 }}>
@@ -322,7 +348,7 @@ function ReceiptBody({ receipt, variant, voidedAt }: Required<Pick<Props, "varia
                         breakInside: "avoid",
                       }}
                     >
-                      <Thumb src={i.img} alt={i.name} size={thumb} />
+                      <Thumb src={i.img} alt={i.name} size={thumb} lazy={!present} />
                       <Box sx={{ minWidth: 0 }}>
                         <Typography noWrap={!present} title={i.name} fontWeight={present ? 700 : 600}>
                           {i.name}
@@ -518,10 +544,385 @@ function PresentHeader({ receipt }: { receipt: ReceiptData }) {
   );
 }
 
-type ThumbSize = number | { xs: number; sm: number };
+// ---- Wide-screen dashboard (present variant, md and up) ----
+//
+// The whole receipt on one screen for a PC or projector: a header strip, then
+// justified picks | items by store | totals. Type and pictures scale with the
+// viewport (the --rd-* sizes), so a busy order fits at 1366×768 and up; an
+// order too big for that scrolls inside its own panel, never the whole dialog.
+
+const fs = {
+  base: "var(--rd-fs)",
+  small: "var(--rd-fs-sm)",
+  reason: "var(--rd-fs-reason)",
+  heading: "var(--rd-fs-h)",
+};
+
+function ReceiptDashboard({ receipt, voidedAt }: { receipt: ReceiptData; voidedAt?: string | null }) {
+  const { items, bySku, itemsByStore, justifications, perStoreTotals, overall, showBreakdown } =
+    useReceiptParts(receipt);
+  const storeTotal = (storeKey: string) =>
+    perStoreTotals.find((s) => (s.storeName || s.storeId) === storeKey || s.storeId === storeKey);
+
+  return (
+    <Box
+      sx={{
+        "--rd-fs": "clamp(13px, min(1.85vh, 1.05vw), 24px)",
+        "--rd-fs-sm": "clamp(12px, min(1.55vh, 0.9vw), 20px)",
+        "--rd-fs-reason": "clamp(16px, min(2.1vh, 1.2vw), 28px)",
+        "--rd-fs-h": "clamp(16px, min(2.5vh, 1.4vw), 32px)",
+        "--rd-thumb": "clamp(30px, 5vh, 64px)",
+        "--rd-jthumb": "clamp(56px, 11vh, 140px)",
+        "--rd-gap": "clamp(8px, 1.5vh, 20px)",
+        flex: 1,
+        minWidth: 0,
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--rd-gap)",
+        fontSize: fs.base,
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {voidedAt && (
+        <Alert severity="error" variant="filled" sx={{ borderRadius: 2, py: 0, fontSize: fs.heading, fontWeight: 700 }}>
+          Voided {dateTime(voidedAt)}. This order was cancelled and the gift card refunded.
+        </Alert>
+      )}
+      {receipt.breakdownSuppressed && (
+        <Alert severity="warning" sx={{ borderRadius: 2, py: 0, fontSize: fs.small }}>
+          The discount calculation system for the store is down. The overall discounts are still accurate, but
+          per-item and shipping breakdowns are hidden.
+        </Alert>
+      )}
+
+      {/* Header strip */}
+      <Paper
+        sx={{
+          px: "calc(var(--rd-gap) * 1.5)",
+          py: "var(--rd-gap)",
+          bgcolor: "grey.900",
+          color: "common.white",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, auto) minmax(0, 1fr) auto",
+          alignItems: "center",
+          columnGap: "calc(var(--rd-gap) * 2.5)",
+          flexShrink: 0,
+        }}
+      >
+        <Typography
+          component="h2"
+          fontWeight={900}
+          sx={{ fontSize: "clamp(32px, min(7vh, 4.2vw), 96px)", lineHeight: 1.05, overflowWrap: "anywhere" }}
+        >
+          {groupLabel(receipt.className)}
+        </Typography>
+        <Box sx={{ minWidth: 0, borderLeft: "2px solid", borderColor: "grey.700", pl: "calc(var(--rd-gap) * 2.5)" }}>
+          <Typography fontWeight={700} sx={{ fontSize: "clamp(20px, min(3.4vh, 2vw), 46px)", lineHeight: 1.2, overflowWrap: "anywhere" }}>
+            {receipt.name}
+          </Typography>
+          <Typography sx={{ fontSize: fs.base, opacity: 0.8 }}>{dateTime(receipt.createdAt)}</Typography>
+        </Box>
+        <Box sx={{ textAlign: "right" }}>
+          <Typography sx={{ fontSize: fs.small, opacity: 0.75, letterSpacing: 2, textTransform: "uppercase", lineHeight: 1.4 }}>
+            Grand total
+          </Typography>
+          <Typography fontWeight={900} sx={{ fontSize: "clamp(30px, min(6.2vh, 3.8vw), 84px)", lineHeight: 1.05, whiteSpace: "nowrap" }}>
+            {money(receipt.grandTotal ?? 0)}
+          </Typography>
+        </Box>
+      </Paper>
+
+      {/* Panels */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          display: "grid",
+          gridTemplateColumns:
+            justifications.length > 0
+              ? "minmax(0, 1.7fr) minmax(0, 1.1fr) minmax(0, 0.8fr)"
+              : "minmax(0, 1.9fr) minmax(0, 1fr)",
+          gap: "var(--rd-gap)",
+        }}
+      >
+        {justifications.length > 0 && (
+          <DashPanel title="Our justified picks">
+            <Stack sx={{ gap: "var(--rd-gap)" }}>
+              {justifications.map((j, idx) => {
+                const ref = bySku[j.sku];
+                const name = ref?.name || j.sku;
+                return (
+                  <Box
+                    key={`${j.sku}-${idx}`}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "var(--rd-jthumb) minmax(0, 1fr)",
+                      columnGap: "var(--rd-gap)",
+                      alignItems: "start",
+                      "&:not(:last-of-type)": { pb: "var(--rd-gap)", borderBottom: "1px dashed", borderColor: "divider" },
+                    }}
+                  >
+                    <Thumb src={ref?.img} alt={name} size="var(--rd-jthumb)" radius={1.5} lazy={false} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5 }}>
+                        <Typography fontWeight={800} sx={{ fontSize: fs.heading, lineHeight: 1.25, flex: 1, minWidth: 0 }}>
+                          {idx + 1}. {name}
+                        </Typography>
+                        {ref && (
+                          <Typography fontWeight={800} sx={{ fontSize: fs.heading, lineHeight: 1.25, whiteSpace: "nowrap" }}>
+                            {money(lineTotal(ref))}
+                          </Typography>
+                        )}
+                      </Box>
+                      {ref?.storeName && (
+                        <Typography color="text.secondary" fontWeight={600} sx={{ fontSize: fs.small }}>
+                          {ref.storeName}
+                          {ref.qty > 1 ? ` · ${ref.qty} × ${money(ref.unitPrice)}` : ""}
+                        </Typography>
+                      )}
+                      <Typography
+                        sx={{
+                          mt: 0.5,
+                          pl: 1.25,
+                          borderLeft: "4px solid",
+                          borderColor: "primary.main",
+                          fontSize: fs.reason,
+                          lineHeight: 1.38,
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {j.text}
+                      </Typography>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Stack>
+          </DashPanel>
+        )}
+
+        <DashPanel title="Items by store">
+          {items.length === 0 && (
+            <Typography color="text.secondary" sx={{ fontSize: fs.base }}>
+              No items recorded for this order.
+            </Typography>
+          )}
+          {/* without justifications this panel is wider: stores flow into two columns */}
+          <Box
+            sx={{
+              columnCount: justifications.length > 0 ? 1 : 2,
+              columnGap: "calc(var(--rd-gap) * 2)",
+              "& > div": { breakInside: "avoid" },
+              "& > div:not(:last-of-type)": { mb: "var(--rd-gap)" },
+            }}
+          >
+            {Object.entries(itemsByStore).map(([store, storeItems]) => {
+              const total = storeTotal(store);
+              return (
+                <Box key={store}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "baseline",
+                      gap: 1,
+                      pb: 0.25,
+                      borderBottom: "2px solid",
+                      borderColor: "text.primary",
+                    }}
+                  >
+                    <Typography fontWeight={800} sx={{ fontSize: fs.base }}>
+                      {store}
+                    </Typography>
+                    {total && (
+                      <Typography fontWeight={800} sx={{ fontSize: fs.base }}>
+                        {money(total.storeTotal ?? 0)}
+                      </Typography>
+                    )}
+                  </Box>
+                  {storeItems.map((i) => {
+                    const final = lineTotal(i);
+                    const original = originalTotal(i);
+                    return (
+                      <Box
+                        key={`${store}-${i.sku}`}
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "var(--rd-thumb) minmax(0, 1fr) auto",
+                          alignItems: "center",
+                          columnGap: 1.25,
+                          py: 0.5,
+                          "&:not(:last-of-type)": { borderBottom: "1px solid", borderColor: "divider" },
+                        }}
+                      >
+                        <Thumb src={i.img} alt={i.name} size="var(--rd-thumb)" lazy={false} />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography fontWeight={700} noWrap title={i.name} sx={{ fontSize: fs.base, lineHeight: 1.3 }}>
+                            {i.name}
+                          </Typography>
+                          <Typography color="text.secondary" sx={{ fontSize: fs.small, lineHeight: 1.3 }}>
+                            {(i.qty ?? 0) + " × " + money(i.unitPrice ?? 0)}
+                            {showBreakdown &&
+                              (i.discounts ?? []).map((d, idx) => (
+                                <Box key={idx} component="span" sx={{ color: "success.main", display: "block" }}>
+                                  − {d.label}: {money(d.amount ?? 0)}
+                                </Box>
+                              ))}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: "right" }}>
+                          {final < original && (
+                            <Typography sx={{ fontSize: fs.small, textDecoration: "line-through", opacity: 0.6, lineHeight: 1.3 }}>
+                              {money(original)}
+                            </Typography>
+                          )}
+                          <Typography
+                            fontWeight={700}
+                            color={final < original ? "success.main" : undefined}
+                            sx={{ fontSize: fs.base, lineHeight: 1.3 }}
+                          >
+                            {money(final)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              );
+            })}
+          </Box>
+        </DashPanel>
+
+        <DashPanel title="Totals">
+          <Stack sx={{ gap: "calc(var(--rd-gap) * 0.75)" }}>
+            {perStoreTotals.map((s) => (
+              <Box key={s.storeId} sx={{ p: "calc(var(--rd-gap) * 0.6)", borderRadius: 1.5, border: "1px solid", borderColor: "divider" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
+                  <Typography fontWeight={700} sx={{ fontSize: fs.base }}>
+                    {s.storeName || s.storeId}
+                  </Typography>
+                  <Typography fontWeight={800} sx={{ fontSize: fs.base }}>
+                    {money(s.storeTotal ?? 0)}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 1.5 }}>
+                  <DashRow label="Items" value={money(s.itemsSubtotal ?? 0)} />
+                  <DashRow label="Discounts" value={"- " + money(s.itemsDiscount ?? 0)} />
+                  <DashRow label="GST" value={money(s.gst ?? 0)} />
+                  <DashRow
+                    label="Shipping"
+                    value={
+                      showBreakdown && (s.shippingBase ?? 0) > 0 && (s.shippingNet ?? 0) === 0
+                        ? "Free"
+                        : money(s.shippingNet ?? 0)
+                    }
+                  />
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+
+          {overall && (
+            <Box sx={{ mt: "var(--rd-gap)" }}>
+              <Typography fontWeight={800} sx={{ fontSize: fs.base, mb: 0.25 }}>
+                Vouchers
+              </Typography>
+              <DashRow label="Total before vouchers" value={money(overall.grandTotalBeforeDiscounts ?? 0)} />
+              {(overall.appliedCodes ?? []).map((c) => (
+                <Typography key={c.code} sx={{ fontSize: fs.small }}>
+                  <strong>{c.code}</strong> — {c.kind === "percent" ? `${c.amount}% off` : `${money(c.amount)} off`}
+                </Typography>
+              ))}
+              {overall.percentDiscountAmount > 0 && (
+                <DashRow label="Percentage vouchers" value={"- " + money(overall.percentDiscountAmount ?? 0)} />
+              )}
+              {overall.absoluteDiscountAmount > 0 && (
+                <DashRow label="Dollar vouchers" value={"- " + money(overall.absoluteDiscountAmount ?? 0)} />
+              )}
+              {overall.capApplied && (
+                <Typography color="warning.main" sx={{ fontSize: fs.small, mt: 0.25 }}>
+                  The maximum discount limit was reached, so the overall discount was capped.
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          <Box
+            sx={{
+              mt: "auto",
+              pt: "var(--rd-gap)",
+              borderTop: "2px solid",
+              borderColor: "text.primary",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              gap: 1,
+              flexWrap: "wrap",
+            }}
+          >
+            <Typography fontWeight={800} sx={{ fontSize: fs.heading }}>
+              Grand total
+            </Typography>
+            <Typography fontWeight={900} sx={{ fontSize: "clamp(22px, min(4vh, 2.3vw), 52px)", lineHeight: 1.1 }}>
+              {money(receipt.grandTotal ?? 0)}
+            </Typography>
+          </Box>
+        </DashPanel>
+      </Box>
+    </Box>
+  );
+}
+
+function DashPanel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Paper
+      sx={{
+        minHeight: 0,
+        overflowY: "auto",
+        p: "calc(var(--rd-gap) * 1.1)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Typography component="h3" fontWeight={800} sx={{ fontSize: fs.heading, mb: "calc(var(--rd-gap) * 0.6)", lineHeight: 1.2 }}>
+        {title}
+      </Typography>
+      {children}
+    </Paper>
+  );
+}
+
+function DashRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
+      <Typography color="text.secondary" sx={{ fontSize: fs.small }}>
+        {label}
+      </Typography>
+      <Typography fontWeight={600} sx={{ fontSize: fs.small, whiteSpace: "nowrap" }}>
+        {value}
+      </Typography>
+    </Box>
+  );
+}
+
+type ThumbSize = number | string | { xs: number; sm: number };
 
 /** Product picture, or a placeholder when the order has none (or it fails to load). */
-function Thumb({ src, alt, size, radius = 1 }: { src?: string; alt: string; size: ThumbSize; radius?: number }) {
+function Thumb({
+  src,
+  alt,
+  size,
+  radius = 1,
+  lazy = true,
+}: {
+  src?: string;
+  alt: string;
+  size: ThumbSize;
+  radius?: number;
+  lazy?: boolean;
+}) {
   const [broken, setBroken] = useState(false);
   const sx = { width: size, height: size, borderRadius: radius, bgcolor: "action.hover", flexShrink: 0 };
   if (!src || broken) {
@@ -536,7 +937,7 @@ function Thumb({ src, alt, size, radius = 1 }: { src?: string; alt: string; size
       component="img"
       src={src}
       alt={alt}
-      loading="lazy"
+      loading={lazy ? "lazy" : "eager"}
       referrerPolicy="no-referrer"
       onError={() => setBroken(true)}
       sx={{ ...sx, objectFit: "cover" }}
