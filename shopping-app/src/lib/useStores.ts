@@ -17,6 +17,7 @@ type SiteInfo = {
   alerts?: SiteAlert[];
   stores?: StoreListItem[];
   discountCap?: DiscountCap | null;
+  justificationsRequired?: number;
 };
 
 export function useStoresList() {
@@ -26,6 +27,7 @@ export function useStoresList() {
   const [gstRate, setGstRate] = useState(0.09);
   const [siteAlerts, setSiteAlerts] = useState<SiteAlert[]>([]);
   const [discountCap, setDiscountCap] = useState<DiscountCap | null>(null);
+  const [justificationsRequired, setJustificationsRequired] = useState(3);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -42,6 +44,9 @@ export function useStoresList() {
         setGstRate(typeof json.gst === "number" ? json.gst : 0.09);
         setSiteAlerts(Array.isArray(json.alerts) ? json.alerts : []);
         setDiscountCap(json.discountCap ?? null);
+        setJustificationsRequired(
+          typeof json.justificationsRequired === "number" ? json.justificationsRequired : 3
+        );
       } catch (e) {
         if ((e as any)?.name !== "AbortError") {
           console.error(e);
@@ -65,6 +70,7 @@ export function useStoresList() {
     gstRate,
     siteAlerts,
     discountCap,
+    justificationsRequired,
   };
 }
 

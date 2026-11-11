@@ -43,7 +43,7 @@ const baseSchema = z.object({
   justifications: z.array(
     z.object({
       key: z.string().min(1, "Pick a product"),
-      text: z.string().min(1, "Tell us why"),
+      text: z.string().trim().min(1, "Tell us why"),
     })
   ),
 });
@@ -58,12 +58,15 @@ export default function CheckoutFormDialog({
   onSubmit,
   items,
   classes,
+  justificationsRequired,
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (values: CheckoutFormValues) => void;
   items: CheckoutItem[];
   classes: string[];
+  /** from Admin → Settings; capped by the different products in the cart */
+  justificationsRequired: number;
 }) {
   const itemsInCart = useMemo(
     () => items.filter((i) => (i.qty ?? 0) > 0),
@@ -89,16 +92,28 @@ export default function CheckoutFormDialog({
     [optionList]
   );
 
-  const justifyCount = Math.min(3, uniqueKeys.length);
+  // the server counts different products by SKU, so do the same here
+  const distinctSkus = useMemo(
+    () => new Set(optionList.map((o) => o.item.sku)).size,
+    [optionList]
+  );
+
+  const justifyCount = Math.max(
+    0,
+    Math.min(3, justificationsRequired, distinctSkus)
+  );
 
   const schema = useMemo(
     () =>
       baseSchema.extend({
         justifications: baseSchema.shape.justifications
-          .min(justifyCount > 0 ? 1 : 0, "Pick at least one item to justify")
-          .max(3, "At most 3 justifications"),
+          .length(justifyCount)
+          .refine(
+            (js) => new Set(js.map((j) => byKey[j.key]?.sku ?? j.key)).size === js.length,
+            "Pick a different product for each justification"
+          ),
       }),
-    [justifyCount]
+    [justifyCount, byKey]
   );
 
   const defaultJustifications = useMemo<JustEntry[]>(
@@ -159,7 +174,7 @@ export default function CheckoutFormDialog({
   }, [open, justifyCount, uniqueKeys.join("|")]);
 
   const visibleJusts = (watch("justifications") ?? []).slice(0, justifyCount);
-  const chosenKeys = visibleJusts.map((j) => j?.key ?? "");
+  const chosenSkus = visibleJusts.map((j) => byKey[j?.key ?? ""]?.sku ?? "");
 
   const renderOptionRow = (opt: CheckoutItem) => {
     const qty = opt.qty ?? 0;
@@ -210,12 +225,7 @@ export default function CheckoutFormDialog({
   const submitHandler = handleSubmit(async (values) => {
     const compactJusts = (values.justifications ?? [])
       .slice(0, justifyCount)
-      .filter((j) => j.key && j.text.trim())
-      .map(({ key, text }) => {
-        const it = byKey[key];
-        return { sku: it?.sku ?? "", text };
-      })
-      .filter((j) => j.sku);
+      .map(({ key, text }) => ({ sku: byKey[key]?.sku ?? "", text: text.trim() }));
 
     onSubmit({
       name: values.name,
@@ -271,10 +281,11 @@ export default function CheckoutFormDialog({
             ))}
           </TextField>
 
-          <Divider textAlign="left">
-            Justify {justifyCount === 0 ? 0 : justifyCount} chosen product
-            {justifyCount > 1 ? "s" : ""}
-          </Divider>
+          {justifyCount > 0 && (
+            <Divider textAlign="left">
+              Justify {justifyCount} chosen product{justifyCount > 1 ? "s" : ""}
+            </Divider>
+          )}
 
           {Array.from({ length: justifyCount }).map((_, idx) => (
             <Box key={idx} sx={{ display: "grid", gap: 1 }}>
@@ -313,8 +324,7 @@ export default function CheckoutFormDialog({
                         key={key}
                         value={key}
                         disabled={
-                          key !== "" &&
-                          chosenKeys.some((k, i) => i !== idx && k === key)
+                          chosenSkus.some((s, i) => i !== idx && s === item.sku)
                         }
                       >
                         {renderOptionRow(item)}
@@ -335,6 +345,13 @@ export default function CheckoutFormDialog({
               />
             </Box>
           ))}
+
+          {justifyCount > 0 &&
+            (errors.justifications?.message || errors.justifications?.root?.message) && (
+              <Typography variant="body2" color="error">
+                {errors.justifications?.message || errors.justifications?.root?.message}
+              </Typography>
+            )}
         </Stack>
       </DialogContent>
 

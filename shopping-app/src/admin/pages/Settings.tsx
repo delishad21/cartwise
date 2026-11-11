@@ -24,6 +24,7 @@ type Form = {
   alerts: Settings["alerts"];
   giftCardFrom: string;
   giftCardValidUntil: string;
+  justificationsRequired: string;
 };
 
 const toForm = (s: Settings): Form => ({
@@ -35,6 +36,7 @@ const toForm = (s: Settings): Form => ({
   alerts: s.alerts,
   giftCardFrom: s.giftCardFrom,
   giftCardValidUntil: s.giftCardValidUntil,
+  justificationsRequired: String(s.justificationsRequired ?? 3),
 });
 
 const parseGroups = (t: string) => [...new Set(t.split(/\n|,/).map((g) => g.trim()).filter(Boolean))];
@@ -59,7 +61,10 @@ export default function SettingsPage() {
   const gst = num(form.gstPct);
   const pMax = form.percentMax.trim() ? num(form.percentMax) : undefined;
   const aMax = form.absoluteMax.trim() ? num(form.absoluteMax) : undefined;
+  const justs = num(form.justificationsRequired);
+  const justsOk = Number.isInteger(justs) && justs >= 0 && justs <= 3;
   const invalid =
+    !justsOk ||
     !form.title.trim() ||
     !(gst >= 0 && gst <= 100) ||
     (pMax !== undefined && !(pMax >= 0 && pMax <= 100)) ||
@@ -106,6 +111,25 @@ export default function SettingsPage() {
                 />
               </Stack>
             </Stack>
+          </Paper>
+
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Typography variant="h6" fontWeight={700} gutterBottom>
+              Checkout
+            </Typography>
+            <TextField
+              label="Justifications required"
+              type="number"
+              value={form.justificationsRequired}
+              onChange={(e) => set({ justificationsRequired: e.target.value })}
+              slotProps={{ htmlInput: { min: 0, max: 3, step: 1 } }}
+              error={!justsOk}
+              helperText={
+                (justsOk ? "" : "A whole number from 0 to 3. ") +
+                "How many different products each student must justify at checkout. Students with fewer products in their cart justify all of them. 0 turns justifications off."
+              }
+              fullWidth
+            />
           </Paper>
 
           <Paper sx={{ p: 2, mb: 2 }}>
@@ -176,6 +200,7 @@ export default function SettingsPage() {
                 discountCap: cap,
                 giftCardFrom: form.giftCardFrom.trim(),
                 giftCardValidUntil: form.giftCardValidUntil.trim(),
+                justificationsRequired: justs,
               });
               await reload();
               showToast("Settings saved");

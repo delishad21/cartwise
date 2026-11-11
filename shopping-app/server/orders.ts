@@ -16,7 +16,8 @@ export const orderSchema = z.object({
   name: z.string().trim().min(1).max(100),
   className: z.string().trim().min(1).max(50),
   justifications: z
-    .array(z.object({ sku: z.string().min(1), text: z.string().trim().min(1).max(2000) }))
+    // blank text is rejected by checkJustifications with a clearer message
+    .array(z.object({ sku: z.string().min(1), text: z.string().trim().max(2000) }))
     .max(3),
   lines: z
     .array(
@@ -59,6 +60,42 @@ export function checkVoucher(db: DB, raw: string): DiscountCode {
   return { code: v.code, kind: v.kind, amount: v.amount, description: v.description };
 }
 
+/** How many justifications an order needs: the setting, capped by the different products in the cart. */
+export const justificationsNeeded = (required: number, distinctProducts: number) =>
+  Math.max(0, Math.min(3, required, distinctProducts));
+
+/**
+ * The order must justify exactly justificationsNeeded() different products,
+ * each in the cart and with non-blank text.
+ */
+export function checkJustifications(
+  justifications: { sku: string; text: string }[],
+  cartSkus: Set<string>,
+  required: number
+) {
+  const needed = justificationsNeeded(required, cartSkus.size);
+  const plural = (n: number) => `${n} product${n === 1 ? "" : "s"}`;
+  if (justifications.some((j) => !j.text.trim())) {
+    throw new ApiError(400, "BAD_JUSTIFICATION", "Please write a reason for each product you justify");
+  }
+  if (justifications.some((j) => !cartSkus.has(j.sku))) {
+    throw new ApiError(400, "BAD_JUSTIFICATION", "Justifications must be for items in your cart");
+  }
+  if (new Set(justifications.map((j) => j.sku)).size !== justifications.length) {
+    throw new ApiError(400, "BAD_JUSTIFICATION", "Please justify different products, not the same one twice");
+  }
+  if (justifications.length !== needed) {
+    throw new ApiError(
+      400,
+      "BAD_JUSTIFICATION",
+      needed === 0
+        ? "Justifications aren't needed for this order. Go back to the checkout details and try again."
+        : `Please justify ${plural(needed)} from your cart. Go back to the checkout details to fill them in.`,
+      { needed }
+    );
+  }
+}
+
 export function placeOrder(db: DB, input: OrderInput) {
   const settings = getSettings(db);
   const stores = listStores(db);
@@ -86,10 +123,11 @@ export function placeOrder(db: DB, input: OrderInput) {
     }
   }
 
-  const cartSkus = new Set(lines.map((l) => l.sku));
-  if (input.justifications.some((j) => !cartSkus.has(j.sku))) {
-    throw new ApiError(400, "BAD_JUSTIFICATION", "Justifications must be for items in your cart");
-  }
+  checkJustifications(
+    input.justifications,
+    new Set(lines.map((l) => l.sku)),
+    settings.justificationsRequired
+  );
 
   // ---- vouchers: known, unused, no duplicates, at most one percent code
   const seen = new Set<string>();

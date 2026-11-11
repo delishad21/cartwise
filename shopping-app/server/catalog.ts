@@ -12,6 +12,8 @@ export type SiteSettings = {
   /** printed on gift cards */
   giftCardFrom: string;
   giftCardValidUntil: string;
+  /** how many different products each student must justify at checkout (0–3) */
+  justificationsRequired: number;
 };
 
 export const DEFAULT_SETTINGS: SiteSettings = {
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   discountCap: null,
   giftCardFrom: "",
   giftCardValidUntil: "",
+  justificationsRequired: 3,
 };
 
 export function getSettings(db: DB): SiteSettings {

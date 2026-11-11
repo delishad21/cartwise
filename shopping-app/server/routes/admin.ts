@@ -67,6 +67,7 @@ const settingsBody = z.object({
     .nullable(),
   giftCardFrom: z.string().trim().max(60),
   giftCardValidUntil: z.string().trim().max(60),
+  justificationsRequired: z.number().int().min(0).max(3).optional(),
 });
 
 const voucherKind = z.enum(["percent", "absolute"]);

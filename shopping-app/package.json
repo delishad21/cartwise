@@ -10,6 +10,7 @@
     "build:server": "esbuild server/index.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outfile=dist-server/index.mjs",
     "start": "node --disable-warning=ExperimentalWarning dist-server/index.mjs",
     "lint": "eslint .",
+    "test": "node --disable-warning=ExperimentalWarning --import tsx --test \"server/**/*.test.ts\"",
     "preview": "vite preview"
   },
   "dependencies": {

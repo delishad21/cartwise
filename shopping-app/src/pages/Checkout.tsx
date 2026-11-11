@@ -29,7 +29,7 @@ import PaymentDialog from "../components/PaymentDialog";
 export default function Checkout() {
   const { lines, clear } = useCart();
   const clearStore = useCart((s) => s.clearStore);
-  const { classes, discountCap } = useStoresList();
+  const { classes, discountCap, justificationsRequired } = useStoresList();
   const nav = useNavigate();
 
   // ----- Cart --> per-store pricing -----
@@ -351,6 +351,7 @@ export default function Checkout() {
         }}
         items={richItems}
         classes={classes}
+        justificationsRequired={justificationsRequired}
       />
 
       {/* 2) Payment modal (server re-prices, charges the card, uses the codes) */}

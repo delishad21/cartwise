@@ -139,6 +139,7 @@ export type Settings = {
   discountCap: DiscountCap | null;
   giftCardFrom: string;
   giftCardValidUntil: string;
+  justificationsRequired: number;
 };
 
 export const voucherLabel = (v: { kind: "percent" | "absolute"; amount: number }) =>

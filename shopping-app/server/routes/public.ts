@@ -21,6 +21,7 @@ export function publicRoutes(app: FastifyInstance, db: DB) {
       classes: s.classes,
       alerts: s.alerts,
       discountCap: s.discountCap,
+      justificationsRequired: s.justificationsRequired,
       stores: listStores(db).map(({ id, name, cover }) => ({ id, name, cover })),
     };
   });
